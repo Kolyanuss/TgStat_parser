@@ -2,13 +2,8 @@ import requests
 from bs4 import BeautifulSoup
 import csv
 import re
-
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException
-import time
+import tkinter as tk
+from tkinter import messagebox
 
 SUBSCRIBERS_PARSING_LIMIT = 100
 TG_ACC_NICNAME = "Золтан Хивай"
@@ -44,11 +39,7 @@ def get_html(url, params = None):
     if result.status_code != 200:
         print('Error, status_code: ', result.status_code)
         exit(1)
-    return result
-
-def get_selenium_html(driver, url):
-    driver.get(url)
-    return driver.page_source
+    return result.text
 
 def get_regions_url(html):
     """
@@ -274,6 +265,13 @@ def get_gender_stat(html_block):
     finally:
         return result
 
+def wait_for_relogin():
+    # Створюємо головне вікно
+    root = tk.Tk()
+    root.withdraw() # hide
+    messagebox.showinfo("Warning", "Login via Telegram on tgstat and then press OK")
+    root.destroy()
+
 def get_all_stats(html):
     """
         Get another statistic for 1 chanel (from url.../stat)
@@ -308,9 +306,11 @@ def get_all_stats(html):
             elif "пол подписчиков" == block_name:
                 result.update(get_gender_stat(block))
     except Exception as e:
-        ex_msg = f"Exeption in get additional statistics: {e}"
-        raise Exception(ex_msg)
+        print(f"Exeption in get additional statistics: {e}. NEXT!")
     finally:
+        if result == get_empty_dict_structure():
+            wait_for_relogin()
+            result = get_all_stats(html)
         return result
 
 def save_file(items, path):
@@ -321,94 +321,8 @@ def save_file(items, path):
         for chanel in items:
             writer.writerow(list(chanel.values()))
 
-def isLoggedOut(driver):
-    html = get_selenium_html(driver, URL_BASE)
-    soup = BeautifulSoup(html, 'html.parser')
-    
-    login_span = soup.find("span", class_="d-none d-sm-inline-block")
-    if login_span is None:
-        return False
-    
-    login_text = get_tag_text_strip(login_span)
-    if login_text == "" or login_text is None:
-        return False
-    elif login_text == "Вход на сайт":
-        return True
-
-def LogIn(driver):
-    driver.get(URL_BASE)
-    login_selector = 'a.popup_ajax.nav-link.nav-user[data-src="/login"]'
-    wait_for_element(driver, login_selector)
-    login_link = WebDriverWait(driver, 10).until(
-        EC.element_to_be_clickable((By.CSS_SELECTOR, login_selector))
-    )
-    login_link.click()
-    login_with_tg_link = WebDriverWait(driver, 10).until(
-        EC.element_to_be_clickable((By.CSS_SELECTOR, 'a.btn.btn-primary.auth-btn[data-login-url="/auth"]'))
-    )
-    login_with_tg_link.click()
-    print("-------- Please, manually log in via Telegram.--------")
-    wait_for_element(driver, "a#topbar-userdrop")
-
-def LogOut(driver):
-    accaunt_link = WebDriverWait(driver, 10).until(
-        EC.element_to_be_clickable((By.CSS_SELECTOR, "a#topbar-userdrop"))
-    )
-    accaunt_link.click()
-    log_out_link = WebDriverWait(driver, 10).until(
-        EC.element_to_be_clickable((By.CSS_SELECTOR, 'a.dropdown-item.notify-item[data-src="/logout"]'))
-    )
-    log_out_link.click()
-
-def wait_for_element(driver, selector, check_interval=5):
-    while True:
-        try:
-            element = WebDriverWait(driver, check_interval).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, selector))
-            )
-            return
-        except TimeoutException:
-            pass
-        time.sleep(check_interval)        
-
-
-def get_selenium_html_expand(driver, url):
-    """
-        returns an html page with a list of channels by clicking on the button "Показать больше"
-    """
-    driver.get(url)
-    try:
-        while True:
-            time.sleep(2)
-            html = driver.page_source
-            
-            soup = BeautifulSoup(html, 'html.parser')
-            items = soup.find_all("div", class_="card")
-            
-            last_chanel_subs = int(get_tag_text_strip(items[-1].find("b")).replace(" ",""))
-            if last_chanel_subs < SUBSCRIBERS_PARSING_LIMIT:
-                return html
-            
-            try:
-                button = WebDriverWait(driver, 10).until(
-                    EC.element_to_be_clickable((By.CSS_SELECTOR, "button.btn.btn-light.border.lm-button.py-1.min-width-220px"))
-                )
-                button.click()
-            except TimeoutException:
-                return html
-            
-    except Exception as e:
-        print(f"Exeption: {e}")
-
-
 def parse():
-    driver = webdriver.Edge()
-    if isLoggedOut(driver):
-        LogIn(driver)
-    
-    html_geo = get_selenium_html(driver, URL_GEO)
-    wait_for_element(driver, "a#topbar-userdrop")
-    # time.sleep(10) # for complete captcha
+    html_geo = get_html(URL_GEO)    
     region_links = get_regions_url(html_geo)
     
     is_use_custom_region = True if input("Use custom region? (y/n):") == "y" else False
@@ -417,7 +331,7 @@ def parse():
     
     for region_url in region_links_cut:
         chanels = []
-        region_html = get_selenium_html_expand(driver, region_url)
+        region_html = get_html(region_url)
         if region_html is None:
             print("region_html is None")
         chanels_url = get_chanels_url(region_html)
@@ -425,9 +339,7 @@ def parse():
         print(f"Scanning {region_url} - {len(chanels_url)} chanels")
         for chanel_url in chanels_url:    
             try:
-                # chanel_stats_html = get_html(chanel_url+URL_STAT) # old get html
-                chanel_stats_html = get_selenium_html(driver, chanel_url+URL_STAT)
-                wait_for_element(driver, "a#topbar-userdrop")
+                chanel_stats_html = get_html(chanel_url+URL_STAT)
                                 
                 chanel_info = {"tg_link": "https://t.me/" + chanel_url.split("@")[-1]} # telegram link is the same as url
                 all_stats = get_all_stats(chanel_stats_html)
@@ -438,13 +350,10 @@ def parse():
                     break
                 
             except Exception as e:
-                print(f"Warning in {chanel_url}: ", e)
+                print(f"Exeption in {chanel_url}: {e}. Continue!")
                     
         region_name = str(region_links.index(region_url)) + " " + region_url.split("/")[-1]
         save_file(chanels, region_name)
         print(f'{len(chanels)} telegram channels saved in {region_name}.')
-    
-    LogOut(driver)
-    driver.quit()
     
 parse()
