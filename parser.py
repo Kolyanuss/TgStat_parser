@@ -65,10 +65,14 @@ def choose_custom_region_url(region_links):
     for i in range(len(region_links)):
         print(f"{i} - {region_links[i]}")
 
-    region_nums = input("Enter the region number for parsing (like: 0 2 6): ")
-    region_nums = map(int, region_nums.strip().split(" "))
+    region_nums = input("Enter the region number for parsing (like: 0 2 6 \ or range: 54-78): ")
+    if "-" in region_nums:
+        start,end = map(int, region_nums.strip().split("-"))
+        urls = [region_links[i] for i in range(start,end)]
+    else:
+        region_nums = map(int, region_nums.strip().split(" "))
+        urls = [region_links[i] for i in region_nums]
         
-    urls = [region_links[i] for i in region_nums]
     print("Start parsing these custom regions: ", urls)
     return urls
 
@@ -268,7 +272,7 @@ def get_gender_stat(html_block):
 def wait_for_relogin():
     # Створюємо головне вікно
     root = tk.Tk()
-    root.withdraw() # hide
+    # root.withdraw() # hide
     messagebox.showinfo("Warning", "Login via Telegram on tgstat and then press OK")
     root.destroy()
 
@@ -308,9 +312,6 @@ def get_all_stats(html):
     except Exception as e:
         print(f"Exeption in get additional statistics: {e}. NEXT!")
     finally:
-        if result == get_empty_dict_structure():
-            wait_for_relogin()
-            result = get_all_stats(html)
         return result
 
 def save_file(items, path):
@@ -339,10 +340,16 @@ def parse():
         print(f"Scanning {region_url} - {len(chanels_url)} chanels")
         for chanel_url in chanels_url:    
             try:
-                chanel_stats_html = get_html(chanel_url+URL_STAT)
-                                
                 chanel_info = {"tg_link": "https://t.me/" + chanel_url.split("@")[-1]} # telegram link is the same as url
+                
+                chanel_stats_html = get_html(chanel_url+URL_STAT)
+
                 all_stats = get_all_stats(chanel_stats_html)
+                while all_stats == get_empty_dict_structure():
+                    wait_for_relogin()
+                    chanel_stats_html = get_html(chanel_url+URL_STAT)
+                    all_stats = get_all_stats(chanel_stats_html)
+                
                 chanel_info.update(all_stats)
                 chanels.append(chanel_info)
                 
