@@ -6,14 +6,16 @@ import tkinter as tk
 from tkinter import messagebox
 
 SUBSCRIBERS_PARSING_LIMIT = 100
-TG_ACC_NICNAME = "Золтан Хивай"
 
 URL_BASE = 'https://tgstat.ru'
 URL_GEO = 'https://tgstat.ru/tags/geo'
 URL_REGION_START = "https://tgstat.ru/tag/"
 URL_STAT = "/stat"
 # https://tgstat.ru/channel/@incident22
-HEADERS = {"user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.88 Safari/537.36",
+HEADERS = {
+    # "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.88 Safari/537.36",
+    # "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36",
+    "user-agent": 'Mozilla/5.0 (Linux; Android 10; SM-G975F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.93 Mobile Safari/537.36',
            "accept" :"*/*"}
 
 def get_H_text_strip(html_h):
