@@ -44,8 +44,23 @@ def get_tag_text_strip(html_tag):
     finally:
         return result
 
-def get_selenium_html(driver, url):
+def check_captcha(driver):
+    html = driver.page_source
+    soup = BeautifulSoup(html, 'html.parser')
+    
+    captcha_block = soup.find("div", class_="modal-dialog modal-md")
+    if captcha_block is None:
+        return False
+    wait_for_relogin()
+    return True 
+    
+
+def get_selenium_html(driver, url, wait=True):
     driver.get(url)
+    while check_captcha(driver):
+        continue
+    if wait:
+        wait_for_element(driver, USERNAME_BUTTON)
     return driver.page_source
 
 def get_regions_url(html):
@@ -310,8 +325,7 @@ def get_all_stats(html):
             elif "пол подписчиков" == block_name:
                 result.update(get_gender_stat(block))
     except Exception as e:
-        ex_msg = f"Exeption in get additional statistics: {e}"
-        raise Exception(ex_msg)
+        print(f"Exeption in get additional statistics: {e}. NEXT!")
     finally:
         return result
 
@@ -324,7 +338,7 @@ def save_file(items, path):
             writer.writerow(list(chanel.values()))
 
 def isLoggedOut(driver):
-    html = get_selenium_html(driver, URL_BASE)
+    html = get_selenium_html(driver, URL_BASE, wait=False)
     soup = BeautifulSoup(html, 'html.parser')
     
     login_span = soup.find("span", class_="d-none d-sm-inline-block")
@@ -415,8 +429,8 @@ def parse():
         LogIn(driver)
     
     html_geo = get_selenium_html(driver, URL_GEO)
-    wait_for_element(driver, USERNAME_BUTTON)
-    # time.sleep(10) # for complete captcha
+    
+    # wait_for_element(driver, USERNAME_BUTTON)
     region_links = get_regions_url(html_geo)
     
     is_use_custom_region = True if input("Use custom region? (y/n):") == "y" else False
@@ -433,11 +447,15 @@ def parse():
         print(f"Scanning {region_url} - {len(chanels_url)} chanels")
         for chanel_url in chanels_url:    
             try:
-                chanel_stats_html = get_selenium_html(driver, chanel_url+URL_STAT)
-                wait_for_element(driver, USERNAME_BUTTON)
-                                
                 chanel_info = {"tg_link": "https://t.me/" + chanel_url.split("@")[-1]} # telegram link is the same as url
+                
+                chanel_stats_html = get_selenium_html(driver, chanel_url+URL_STAT)                                
                 all_stats = get_all_stats(chanel_stats_html)
+                while all_stats == get_empty_dict_structure():
+                    wait_for_relogin()
+                    chanel_stats_html = get_selenium_html(driver, chanel_url+URL_STAT)
+                    all_stats = get_all_stats(chanel_stats_html)
+                    
                 chanel_info.update(all_stats)
                 chanels.append(chanel_info)
                 
@@ -445,7 +463,7 @@ def parse():
                     break
                 
             except Exception as e:
-                print(f"Warning in {chanel_url}: ", e)
+                print(f"Exeption in {chanel_url}: {e}. Continue!")
                     
         region_name = str(region_links.index(region_url)) + " " + region_url.split("/")[-1]
         save_file(chanels, region_name)
