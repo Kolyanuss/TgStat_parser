@@ -1,17 +1,20 @@
-import requests
 from bs4 import BeautifulSoup
 import csv
 import re
 
-from selenium import webdriver
+# from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
 import time
 
+import undetected_chromedriver as uc
+
+import tkinter as tk
+from tkinter import messagebox
+
 SUBSCRIBERS_PARSING_LIMIT = 100
-TG_ACC_NICNAME = "Золтан Хивай"
 
 URL_BASE = 'https://tgstat.ru'
 URL_GEO = 'https://tgstat.ru/tags/geo'
@@ -20,6 +23,8 @@ URL_STAT = "/stat"
 # https://tgstat.ru/channel/@incident22
 HEADERS = {"user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.88 Safari/537.36",
            "accept" :"*/*"}
+
+USERNAME_BUTTON = "a#topbar-userdrop"
 
 def get_H_text_strip(html_h):
     result = None
@@ -38,13 +43,6 @@ def get_tag_text_strip(html_tag):
         pass
     finally:
         return result
-
-def get_html(url, params = None):
-    result = requests.get(url, headers=HEADERS, params=params)
-    if result.status_code != 200:
-        print('Error, status_code: ', result.status_code)
-        exit(1)
-    return result
 
 def get_selenium_html(driver, url):
     driver.get(url)
@@ -74,10 +72,14 @@ def choose_custom_region_url(region_links):
     for i in range(len(region_links)):
         print(f"{i} - {region_links[i]}")
 
-    region_nums = input("Enter the region number for parsing (like: 0 2 6): ")
-    region_nums = map(int, region_nums.strip().split(" "))
+    region_nums = input("Enter the region number for parsing (like: 0 2 6 \ or range: 54-78): ")
+    if "-" in region_nums:
+        start,end = map(int, region_nums.strip().split("-"))
+        urls = [region_links[i] for i in range(start,end)]
+    else:
+        region_nums = map(int, region_nums.strip().split(" "))
+        urls = [region_links[i] for i in region_nums]
         
-    urls = [region_links[i] for i in region_nums]
     print("Start parsing these custom regions: ", urls)
     return urls
 
@@ -348,11 +350,11 @@ def LogIn(driver):
     )
     login_with_tg_link.click()
     print("-------- Please, manually log in via Telegram.--------")
-    wait_for_element(driver, "a#topbar-userdrop")
+    wait_for_element(driver, USERNAME_BUTTON)
 
 def LogOut(driver):
     accaunt_link = WebDriverWait(driver, 10).until(
-        EC.element_to_be_clickable((By.CSS_SELECTOR, "a#topbar-userdrop"))
+        EC.element_to_be_clickable((By.CSS_SELECTOR, USERNAME_BUTTON))
     )
     accaunt_link.click()
     log_out_link = WebDriverWait(driver, 10).until(
@@ -371,6 +373,11 @@ def wait_for_element(driver, selector, check_interval=5):
             pass
         time.sleep(check_interval)        
 
+def wait_for_relogin():
+    root = tk.Tk()
+    # root.withdraw() # hide
+    messagebox.showinfo("Warning", "Login via Telegram on tgstat and then press OK")
+    root.destroy()
 
 def get_selenium_html_expand(driver, url):
     """
@@ -402,12 +409,13 @@ def get_selenium_html_expand(driver, url):
 
 
 def parse():
-    driver = webdriver.Edge()
+    # driver = webdriver.Edge()
+    driver = uc.Chrome()
     if isLoggedOut(driver):
         LogIn(driver)
     
     html_geo = get_selenium_html(driver, URL_GEO)
-    wait_for_element(driver, "a#topbar-userdrop")
+    wait_for_element(driver, USERNAME_BUTTON)
     # time.sleep(10) # for complete captcha
     region_links = get_regions_url(html_geo)
     
@@ -425,9 +433,8 @@ def parse():
         print(f"Scanning {region_url} - {len(chanels_url)} chanels")
         for chanel_url in chanels_url:    
             try:
-                # chanel_stats_html = get_html(chanel_url+URL_STAT) # old get html
                 chanel_stats_html = get_selenium_html(driver, chanel_url+URL_STAT)
-                wait_for_element(driver, "a#topbar-userdrop")
+                wait_for_element(driver, USERNAME_BUTTON)
                                 
                 chanel_info = {"tg_link": "https://t.me/" + chanel_url.split("@")[-1]} # telegram link is the same as url
                 all_stats = get_all_stats(chanel_stats_html)
